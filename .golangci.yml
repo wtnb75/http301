@@ -1,0 +1,22 @@
+linters:
+  enable:
+  - asciicheck
+  - bidichk
+  - canonicalheader
+  - copyloopvar
+  - cyclop
+  - funlen
+  - gocognit
+  - gocyclo
+  - maintidx
+  - nestif
+  - gofmt
+  - lll
+  - decorder
+  - dupword
+  - durationcheck
+  - errname
+  - gosmopolitan
+  - misspell
+  - predeclared
+  - sloglint
