@@ -20,14 +20,19 @@ type Regexp struct {
 }
 
 type Configlet struct {
-	Regex      Regexp `yaml:"regex,omitempty"`
-	Redirect   string `yaml:"redirect,omitempty"`
-	StatusCode int    `yaml:"status,omitempty"`
+	Regex        Regexp `yaml:"regex,omitempty"`
+	Redirect     string `yaml:"redirect,omitempty"`
+	StatusCode   int    `yaml:"status,omitempty"`
+	Query        bool   `yaml:"query,omitempty"`
+	Fragment     bool   `yaml:"fragment,omitempty"`
+	IncludeQuery bool   `yaml:"include_query,omitempty"`
 }
 
 type ConfigFile struct {
-	Base   string      `yaml:"baseurl"`
-	Config []Configlet `yaml:"redirect"`
+	Base      string      `yaml:"baseurl,omitempty"`
+	Prefix    string      `yaml:"prefix,omitempty"`
+	AddPrefix string      `yaml:"addprefix,omitempty"`
+	Config    []Configlet `yaml:"redirect,omitempty"`
 }
 
 type Handler struct {
@@ -57,14 +62,8 @@ func (hdl *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	hdl.rwlock.RLock()
 	defer hdl.rwlock.RUnlock()
 	slog.Info("request", "url", r.URL)
-	redirect, code := hdl.redirect(r.URL.Path)
+	redirect, code := hdl.redirect(r.URL)
 	if redirect != "" {
-		if r.URL.RawQuery != "" {
-			redirect += "?" + r.URL.RawQuery
-		}
-		if r.URL.Fragment != "" {
-			redirect += "#" + r.URL.Fragment
-		}
 		w.Header().Set("Location", redirect)
 	}
 	slog.Info("response", "status", code, "location", redirect)
@@ -106,23 +105,52 @@ func (hdl *Handler) Shutdown() error {
 	return hdl.server.Shutdown(ctx)
 }
 
-func (hdl *Handler) redirect(path string) (string, int) {
+func (hdl *Handler) fixurl(u *url.URL, v *Configlet, redirect_to string) string {
+	res := redirect_to
 	var err error
+	if hdl.configdata.Base != "" {
+		res, err = url.JoinPath(hdl.configdata.Base, res)
+		if err != nil {
+			slog.Error("joinpath", "base", hdl.configdata.Base, "target", res, "error", err)
+			return ""
+		}
+	}
+	if v.Query && u.RawQuery != "" {
+		res += "?" + u.RawQuery
+	}
+	if v.Fragment && u.RawFragment != "" {
+		res += "#" + u.RawFragment
+	}
+	if hdl.configdata.AddPrefix != "" {
+		res = hdl.configdata.AddPrefix + res
+	}
+	return res
+}
+
+func (hdl *Handler) redirect(u *url.URL) (string, int) {
+	path := u.Path
+	if hdl.configdata.Prefix != "" {
+		path = hdl.configdata.Prefix + path
+	}
 	for _, v := range hdl.configdata.Config {
-		if v.Regex.MatchString(path) {
-			var code int = 301
+		vpath := path
+		if v.IncludeQuery && u.RawQuery != "" {
+			vpath += "?" + u.RawQuery
+		}
+		slog.Debug("check", "path", vpath, "match", v.Regex.String())
+		if v.Regex.MatchString(vpath) {
+			var code int = http.StatusMovedPermanently
 			if v.StatusCode != 0 {
 				code = v.StatusCode
 			}
-			res := v.Regex.ReplaceAllString(path, v.Redirect)
-			if hdl.configdata.Base != "" {
-				res, err = url.JoinPath(hdl.configdata.Base, res)
-				if err != nil {
-					slog.Error("joinpath", "base", hdl.configdata.Base, "target", res, "error", err)
-					return "", http.StatusInternalServerError
-				}
+			res1 := v.Regex.ReplaceAllString(vpath, v.Redirect)
+			res2 := hdl.fixurl(u, &v, res1)
+			if res2 == "" {
+				// error?
+				slog.Warn("cannot fix", "result", res1)
+				continue
 			}
-			return res, code
+			return res2, code
 		}
 	}
 	return "", http.StatusNotFound
