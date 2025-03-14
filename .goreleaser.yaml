@@ -1,0 +1,86 @@
+version: 2
+
+project_name: http301
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+      - wasip1
+    goarch:
+      - amd64
+      - arm64
+      - wasm
+
+dockers:
+  - image_templates:
+      - "ghcr.io/wtnb75/{{ .ProjectName }}:latest-amd64"
+      - "ghcr.io/wtnb75/{{ .ProjectName }}:{{ .Version }}-amd64"
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+    goarch: amd64
+  - image_templates:
+      - "ghcr.io/wtnb75/{{ .ProjectName }}:latest-arm64"
+      - "ghcr.io/wtnb75/{{ .ProjectName }}:{{ .Version }}-arm64"
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+    goarch: arm64
+  #- image_templates:
+  #    - "ghcr.io/wtnb75/{{ .ProjectName }}:latest-wasi"
+  #    - "ghcr.io/wtnb75/{{ .ProjectName }}:{{ .Version }}-wasi"
+  #  use: buildx
+  #  build_flag_templates:
+  #    - "--pull"
+  #    - "--platform=wasi/wasm"
+  #    - "--build-arg=EXT=.wasm"
+  #    - "--label=org.opencontainers.image.created={{ .Date }}"
+  #    - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+  #    - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+  #    - "--label=org.opencontainers.image.version={{ .Version }}"
+  #  goarch: wasm
+  #  goos: wasip1
+
+docker_manifests:
+  - name_template: "ghcr.io/wtnb75/{{ .ProjectName }}:{{ .Version }}"
+    image_templates:
+       - "ghcr.io/wtnb75/{{ .ProjectName }}:{{ .Version }}-arm64"
+       - "ghcr.io/wtnb75/{{ .ProjectName }}:{{ .Version }}-amd64"
+       #- "ghcr.io/wtnb75/{{ .ProjectName }}:{{ .Version }}-wasi"
+
+archives:
+  - formats: ['binary']
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: ['zip']
+
+snapshot:
+  version_template: "{{ .Branch }}"
+
+changelog:
+  disable: true
