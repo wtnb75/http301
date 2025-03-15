@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -183,6 +184,36 @@ func (hdl *Handler) redirect(u *url.URL) (string, int) {
 	return "", http.StatusNotFound
 }
 
+func (hdl *Handler) ServeSignal() {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGUSR1)
+
+	go func() {
+		var err error
+		for {
+			sig := <-sigs
+			slog.Info("caught signal", "signal", sig)
+			switch sig {
+			case syscall.SIGHUP:
+				if err = hdl.Reload(); err != nil {
+					slog.Error("reload failed", "error", err)
+					return
+				}
+			case syscall.SIGUSR1:
+				if err = hdl.Save(); err != nil {
+					slog.Error("save failed", "error", err)
+					return
+				}
+			case syscall.SIGINT, syscall.SIGTERM:
+				if err = hdl.Shutdown(); err != nil {
+					slog.Error("terminate failed", "error", err)
+				}
+				return
+			}
+		}
+	}()
+}
+
 func init_log(verbose, quiet, json_log bool) {
 	level := slog.LevelInfo
 	if verbose {
@@ -197,6 +228,15 @@ func init_log(verbose, quiet, json_log bool) {
 	}
 }
 
+func do_listen(listen string) (net.Listener, error) {
+	protos := strings.SplitN(listen, ":", 2)
+	switch protos[0] {
+	case "unix", "tcp", "tcp4", "tcp6":
+		return net.Listen(protos[0], protos[1])
+	}
+	return net.Listen("tcp", listen)
+}
+
 func main() {
 	var (
 		config   = flag.String("config", "", "config file")
@@ -208,7 +248,6 @@ func main() {
 	flag.Parse()
 	init_log(*verbose, *quiet, *json_log)
 	server := http.Server{
-		Addr:     *listen,
 		Handler:  nil,
 		ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelInfo),
 	}
@@ -222,36 +261,15 @@ func main() {
 		slog.Error("loading config", "error", err)
 		return
 	}
+	handler.ServeSignal()
 
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGUSR1)
-
-	go func() {
-		var err error
-		for {
-			sig := <-sigs
-			slog.Info("caught signal", "signal", sig)
-			switch sig {
-			case syscall.SIGHUP:
-				if err = handler.Reload(); err != nil {
-					slog.Error("reload failed", "error", err)
-					return
-				}
-			case syscall.SIGUSR1:
-				if err = handler.Save(); err != nil {
-					slog.Error("save failed", "error", err)
-					return
-				}
-			case syscall.SIGINT, syscall.SIGTERM:
-				if err = handler.Shutdown(); err != nil {
-					slog.Error("terminate failed", "error", err)
-				}
-				return
-			}
-		}
-	}()
-	slog.Info("starting server", "listen", server.Addr, "pid", os.Getpid())
-	err := server.ListenAndServe()
+	listener, err := do_listen(*listen)
+	if err != nil {
+		slog.Error("listen error", "error", err)
+		return
+	}
+	slog.Info("server starting", "listen", listener.Addr(), "pid", os.Getpid())
+	err = server.Serve(listener)
 	if err != nil && err != http.ErrServerClosed {
 		slog.Error("listen error", "error", err)
 		return
