@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -20,12 +21,13 @@ type Regexp struct {
 }
 
 type Configlet struct {
-	Regex        Regexp `yaml:"regex,omitempty"`
-	Redirect     string `yaml:"redirect,omitempty"`
-	StatusCode   int    `yaml:"status,omitempty"`
-	Query        bool   `yaml:"query,omitempty"`
-	Fragment     bool   `yaml:"fragment,omitempty"`
-	IncludeQuery bool   `yaml:"include_query,omitempty"`
+	Regex        *Regexp `yaml:"regex,omitempty"`
+	Prefix       string  `yaml:"prefix,omitempty"`
+	Redirect     string  `yaml:"redirect,omitempty"`
+	StatusCode   int     `yaml:"status,omitempty"`
+	Query        bool    `yaml:"query,omitempty"`
+	Fragment     bool    `yaml:"fragment,omitempty"`
+	IncludeQuery bool    `yaml:"include_query,omitempty"`
 }
 
 type ConfigFile struct {
@@ -42,20 +44,13 @@ type Handler struct {
 	rwlock     *sync.RWMutex
 }
 
-func (re *Regexp) UnmarshalText(input []byte) error {
-	regex, err := regexp.Compile(string(input))
+func (re *Regexp) UnmarshalYAML(input *yaml.Node) error {
+	regex, err := regexp.Compile(input.Value)
 	if err != nil {
 		return err
 	}
 	re.Regexp = regex
 	return nil
-}
-
-func (re *Regexp) MarshalText() ([]byte, error) {
-	if re.Regexp != nil {
-		return []byte(re.Regexp.String()), nil
-	}
-	return nil, nil
 }
 
 func (hdl *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +66,7 @@ func (hdl *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (hdl *Handler) Reload() error {
-	rdata, err := hdl.load(hdl.configfile)
+	rdata, err := hdl.load_yaml(hdl.configfile)
 	if err != nil {
 		slog.Error("load error", "error", err)
 		return err
@@ -82,7 +77,7 @@ func (hdl *Handler) Reload() error {
 	return nil
 }
 
-func (hdl *Handler) load(fname string) (*ConfigFile, error) {
+func (hdl *Handler) load_yaml(fname string) (*ConfigFile, error) {
 	fi, err := os.Open(fname)
 	if err != nil {
 		slog.Error("cannot open", "fname", fname, "error", err)
@@ -98,6 +93,33 @@ func (hdl *Handler) load(fname string) (*ConfigFile, error) {
 	}
 	slog.Info("loaded", "file", fname, "config", config)
 	return &config, nil
+}
+
+func (hdl *Handler) Save() error {
+	return hdl.dump_yaml(hdl.configfile)
+}
+
+func (hdl *Handler) dump_yaml(fname string) error {
+	bakname := fname + ".bak"
+	err := os.Rename(fname, bakname)
+	if err != nil {
+		slog.Debug("cannot rename", "fname", fname, "bakname", bakname, "error", err)
+	}
+	fo, err := os.Create(fname)
+	if err != nil {
+		slog.Error("cannot open(create)", "fname", fname, "error", err)
+		return err
+	}
+	defer fo.Close()
+	enc := yaml.NewEncoder(fo)
+	enc.SetIndent(2)
+	err = enc.Encode(hdl.configdata)
+	if err != nil {
+		slog.Error("cannot encode", "fname", fname, "error", err)
+		return err
+	}
+	slog.Info("saved", "file", fname, "config", hdl.configdata)
+	return nil
 }
 
 func (hdl *Handler) Shutdown() error {
@@ -137,13 +159,18 @@ func (hdl *Handler) redirect(u *url.URL) (string, int) {
 		if v.IncludeQuery && u.RawQuery != "" {
 			vpath += "?" + u.RawQuery
 		}
-		slog.Debug("check", "path", vpath, "match", v.Regex.String())
-		if v.Regex.MatchString(vpath) {
-			var code int = http.StatusMovedPermanently
+		slog.Debug("check", "path", vpath, "match", v.Regex, "prefix", v.Prefix)
+		var code int = http.StatusMovedPermanently
+		var res1 string
+		if v.Prefix != "" && strings.HasPrefix(vpath, v.Prefix) {
+			res1 = v.Redirect + vpath[len(v.Prefix):]
+		} else if v.Regex != nil && v.Regex.MatchString(vpath) {
 			if v.StatusCode != 0 {
 				code = v.StatusCode
 			}
-			res1 := v.Regex.ReplaceAllString(vpath, v.Redirect)
+			res1 = v.Regex.ReplaceAllString(vpath, v.Redirect)
+		}
+		if res1 != "" {
 			res2 := hdl.fixurl(u, &v, res1)
 			if res2 == "" {
 				// error?
@@ -156,13 +183,30 @@ func (hdl *Handler) redirect(u *url.URL) (string, int) {
 	return "", http.StatusNotFound
 }
 
+func init_log(verbose, quiet, json_log bool) {
+	level := slog.LevelInfo
+	if verbose {
+		level = slog.LevelDebug
+	} else if quiet {
+		level = slog.LevelWarn
+	}
+	if json_log {
+		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
+	} else {
+		slog.SetLogLoggerLevel(level)
+	}
+}
+
 func main() {
 	var (
-		config = flag.String("config", "", "config file")
-		listen = flag.String("listen", ":8000", "listen address")
+		config   = flag.String("config", "", "config file")
+		listen   = flag.String("listen", ":8000", "listen address")
+		verbose  = flag.Bool("verbose", false, "verbose output")
+		quiet    = flag.Bool("quiet", false, "quiet output")
+		json_log = flag.Bool("json-log", false, "json logger")
 	)
 	flag.Parse()
-	slog.Info("hello world")
+	init_log(*verbose, *quiet, *json_log)
 	server := http.Server{
 		Addr:     *listen,
 		Handler:  nil,
@@ -180,7 +224,7 @@ func main() {
 	}
 
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGUSR1)
 
 	go func() {
 		var err error
@@ -191,6 +235,11 @@ func main() {
 			case syscall.SIGHUP:
 				if err = handler.Reload(); err != nil {
 					slog.Error("reload failed", "error", err)
+					return
+				}
+			case syscall.SIGUSR1:
+				if err = handler.Save(); err != nil {
+					slog.Error("save failed", "error", err)
 					return
 				}
 			case syscall.SIGINT, syscall.SIGTERM:

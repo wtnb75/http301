@@ -11,7 +11,7 @@ builds:
       - CGO_ENABLED=0
     goos:
       - linux
-      - windows
+      #- windows  (no SIGUSR1)
       - darwin
       - wasip1
     goarch:

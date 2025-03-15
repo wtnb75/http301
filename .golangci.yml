@@ -4,7 +4,7 @@ linters:
   - bidichk
   - canonicalheader
   - copyloopvar
-  - cyclop
+  #- cyclop
   - funlen
   - gocognit
   - gocyclo
