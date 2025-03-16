@@ -74,7 +74,7 @@ func (c *Configlet) replace(path, query string) (string, error) {
 		if ok, err := c.Regex2.MatchString(vpath); err == nil && ok {
 			slog.Debug("regex2 match", "pattern", c.Regex2, "vpath", vpath, "to", c.Redirect)
 			return c.Regex2.Replace(vpath, c.Redirect, -1, -1)
-		}else{
+		} else {
 			slog.Debug("regex2 error/miss", "pattern", c.Regex2, "vpath", vpath, "error", err, "ok", ok)
 		}
 	}
@@ -305,6 +305,7 @@ func main() {
 		verbose  = flag.Bool("verbose", false, "verbose output")
 		quiet    = flag.Bool("quiet", false, "quiet output")
 		json_log = flag.Bool("json-log", false, "json logger")
+		otel     = flag.Bool("opentelemetry", false, "opentelemetry instrument")
 	)
 	flag.Parse()
 	init_log(*verbose, *quiet, *json_log)
@@ -317,12 +318,23 @@ func main() {
 		server:     &server,
 		rwlock:     &sync.RWMutex{},
 	}
-	http.Handle("/", &handler)
 	if err := handler.Reload(); err != nil {
 		slog.Error("loading config", "error", err)
 		return
 	}
 	handler.ServeSignal()
+	if *otel {
+		stop, hdl, err := init_otel(&handler, "http301")
+		if err != nil {
+			slog.Warn("cannot initialize opentelemetry", "error", err)
+			http.Handle("/", &handler)
+		} else {
+			defer stop()
+			http.Handle("/", hdl)
+		}
+	} else {
+		http.Handle("/", &handler)
+	}
 
 	listener, err := do_listen(*listen)
 	if err != nil {
