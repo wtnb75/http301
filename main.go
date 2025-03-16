@@ -62,18 +62,20 @@ func (c *Configlet) replace(path, query string) (string, error) {
 		slog.Debug("prefix match", "pattern", c.Prefix, "vpath", vpath, "to", c.Redirect)
 		return c.Redirect + vpath[len(c.Prefix):], nil
 	}
-	if c.Suffix != "" && strings.HasSuffix(vpath, c.Prefix) {
+	if c.Suffix != "" && strings.HasSuffix(vpath, c.Suffix) {
 		slog.Debug("suffix match", "pattern", c.Suffix, "vpath", vpath, "to", c.Redirect)
-		return vpath[:len(c.Suffix)] + c.Redirect, nil
+		return vpath[:len(vpath)-len(c.Suffix)] + c.Redirect, nil
 	}
 	if c.Regex != nil && c.Regex.MatchString(vpath) {
 		slog.Info("regex match", "pattern", c.Regex, "vpath", vpath, "to", c.Redirect)
 		return c.Regex.ReplaceAllString(vpath, c.Redirect), nil
 	}
 	if c.Regex2 != nil {
-		if ok, err := c.Regex2.MatchString(vpath); err != nil && ok {
+		if ok, err := c.Regex2.MatchString(vpath); err == nil && ok {
 			slog.Debug("regex2 match", "pattern", c.Regex2, "vpath", vpath, "to", c.Redirect)
 			return c.Regex2.Replace(vpath, c.Redirect, -1, -1)
+		}else{
+			slog.Debug("regex2 error/miss", "pattern", c.Regex2, "vpath", vpath, "error", err, "ok", ok)
 		}
 	}
 	if c.Glob != "" {
@@ -192,6 +194,9 @@ func (hdl *Handler) Shutdown() error {
 func (hdl *Handler) fixurl(u *url.URL, v *Configlet, redirect_to string) string {
 	res := redirect_to
 	var err error
+	if hdl.configdata.AddPrefix != "" {
+		res = hdl.configdata.AddPrefix + res
+	}
 	if hdl.configdata.Base != "" {
 		res, err = url.JoinPath(hdl.configdata.Base, res)
 		if err != nil {
@@ -205,16 +210,13 @@ func (hdl *Handler) fixurl(u *url.URL, v *Configlet, redirect_to string) string 
 	if v.Fragment && u.RawFragment != "" {
 		res += "#" + u.RawFragment
 	}
-	if hdl.configdata.AddPrefix != "" {
-		res = hdl.configdata.AddPrefix + res
-	}
 	return res
 }
 
 func (hdl *Handler) redirect(u *url.URL) (string, int) {
 	path := u.Path
 	if hdl.configdata.Prefix != "" {
-		path = hdl.configdata.Prefix + path
+		path = strings.TrimPrefix(path, hdl.configdata.Prefix)
 	}
 	for idx, v := range hdl.configdata.Config {
 		var code int = http.StatusMovedPermanently
