@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/dlclark/regexp2"
 	glob "github.com/pachyderm/ohmyglob"
@@ -99,8 +100,8 @@ type Handler struct {
 	rwlock     *sync.RWMutex
 }
 
-func (re *Regexp) UnmarshalYAML(input *yaml.Node) error {
-	regex, err := regexp.Compile(input.Value)
+func (re *Regexp) UnmarshalText(text []byte) error {
+	regex, err := regexp.Compile(string(text))
 	if err != nil {
 		return err
 	}
@@ -108,8 +109,8 @@ func (re *Regexp) UnmarshalYAML(input *yaml.Node) error {
 	return nil
 }
 
-func (re *Regexp2) UnmarshalYAML(input *yaml.Node) error {
-	regex, err := regexp2.Compile(input.Value, 0)
+func (re *Regexp2) UnmarshalText(text []byte) error {
+	regex, err := regexp2.Compile(string(text), 0)
 	if err != nil {
 		return err
 	}
@@ -118,6 +119,7 @@ func (re *Regexp2) UnmarshalYAML(input *yaml.Node) error {
 }
 
 func (hdl *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	hdl.rwlock.RLock()
 	defer hdl.rwlock.RUnlock()
 	slog.Info("request", "url", r.URL)
@@ -125,8 +127,8 @@ func (hdl *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if redirect != "" {
 		w.Header().Set("Location", redirect)
 	}
-	slog.Info("response", "status", code, "location", redirect)
 	w.WriteHeader(code)
+	slog.Info("response", "url", r.URL, "status", code, "location", redirect, "elapsed", time.Since(start))
 }
 
 func (hdl *Handler) Reload() error {
