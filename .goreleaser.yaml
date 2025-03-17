@@ -18,6 +18,18 @@ builds:
       - amd64
       - arm64
       - wasm
+  - id: http301-otel
+    env:
+      - CGO_ENABLED=0
+    tags:
+      - otel
+    goos:
+      - linux
+      - wasip1
+    goarch:
+      - amd64
+      - arm64
+      - wasm
 
 dockers:
   - image_templates:
