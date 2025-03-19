@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	github.com/dlclark/regexp2 v1.11.5
+	github.com/jessevdk/go-flags v1.6.1
 	github.com/pachyderm/ohmyglob v0.0.0-20210308211843-d5b47775fc36
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0
 	go.opentelemetry.io/otel v1.35.0
