@@ -232,7 +232,7 @@ func (hdl *Handler) redirect(u *url.URL) (string, int) {
 		path = strings.TrimPrefix(path, hdl.configdata.Prefix)
 	}
 	for idx, v := range hdl.configdata.Config {
-		var code int = http.StatusMovedPermanently
+		var code = http.StatusMovedPermanently
 		slog.Debug("check", "rule-id", idx, "path", path, "rule", v)
 		res1, err := v.replace(path, u.RawQuery)
 		if err != nil {
