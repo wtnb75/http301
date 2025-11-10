@@ -23,7 +23,7 @@ jobs:
     - name: vet
       run: go vet ./...
     - name: lint
-      uses: golangci/golangci-lint-action@v6
+      uses: golangci/golangci-lint-action@v9
     - name: test
       run: go test -v ./... -coverprofile=./cover.out -covermode=atomic -coverpkg=./... -json > report.json
     - name: report
