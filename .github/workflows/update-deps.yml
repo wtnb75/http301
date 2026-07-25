@@ -1,4 +1,4 @@
-name: update go.mod
+name: update-deps
 
 on:
   workflow_dispatch: {}
@@ -8,27 +8,11 @@ permissions:
   pull-requests: write
 
 jobs:
-  update_deps:
-
+  update-deps:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 'stable'
-          cache: true
-      - run: go get -u
-      - run: go mod tidy
-      - name: lint
-        uses: golangci/golangci-lint-action@v7
-      - name: test
-        run: go test -v ./... -coverprofile=./cover.out -covermode=atomic -coverpkg=./...
-      - name: Create PR
-        uses: peter-evans/create-pull-request@v7
-        with:
-          commit-message: Update Dependencies
-          title: 'auto update dependencies'
-          add-paths: |
-             go.mod
-             go.sum
+    - uses: actions/checkout@v6
+    - uses: wtnb75/actions/golang@v1
+    - uses: wtnb75/actions/goupdate@v1
+      with:
+        go-test-args: "-v ./..."

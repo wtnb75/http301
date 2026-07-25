@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push: {}
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - uses: wtnb75/actions/golang@v1
+    - uses: wtnb75/actions/gotest@v1
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - uses: actions/checkout@v6
+    - uses: wtnb75/actions/docker@v1
+      with:
+        push: 'true'
+        context: .
+        file: Dockerfile.branch
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
