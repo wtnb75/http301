@@ -11,9 +11,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
-    - uses: wtnb75/actions/golang@v1
-    - uses: wtnb75/actions/gotest@v1
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+    - uses: wtnb75/actions/golang@e91993ee54862b807c74f88477c8818b6c300d5b # v1.0.0
+    - uses: wtnb75/actions/gotest@e91993ee54862b807c74f88477c8818b6c300d5b # v1.0.0
 
   docker:
     needs: test
@@ -22,8 +22,8 @@ jobs:
       contents: read
       packages: write
     steps:
-    - uses: actions/checkout@v6
-    - uses: wtnb75/actions/docker@v1
+    - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+    - uses: wtnb75/actions/docker@e91993ee54862b807c74f88477c8818b6c300d5b # v1.0.0
       with:
         push: 'true'
         context: .
