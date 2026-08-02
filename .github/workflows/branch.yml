@@ -1,7 +1,8 @@
-name: ci
+name: branch
 
 on:
-  push: {}
+  push:
+    branches-ignore: [main]
   workflow_dispatch: {}
 
 permissions:
@@ -12,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - uses: wtnb75/actions/golang@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
-    - uses: wtnb75/actions/gotest@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
+    - uses: wtnb75/actions/golang@v1
+    - uses: wtnb75/actions/gotest@v1
 
   docker:
     needs: test
@@ -23,7 +24,7 @@ jobs:
       packages: write
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - uses: wtnb75/actions/docker@c1711251ea69e3e6d68db7a9fa019d79b497f70c # v1.0.3
+    - uses: wtnb75/actions/docker@v1
       with:
         push: 'true'
         context: .
