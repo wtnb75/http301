@@ -2,7 +2,7 @@ name: main
 
 on:
   push:
-    branches: [main, feat/branch-main-tag-rename]
+    branches: [main]
   workflow_dispatch: {}
 
 permissions:
