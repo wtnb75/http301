@@ -38,6 +38,7 @@ func realMain() int {
 	var err error
 	commands := []SubCommand{
 		{Name: "webserver", Short: "boot webserver", Long: "boot zipweb", Data: &WebServer{}},
+		{Name: "version", Short: "show version", Long: "show version and exit", Data: &VersionCmd{}},
 	}
 	parser := flags.NewParser(&globalOption, flags.Default)
 	for _, cmd := range commands {

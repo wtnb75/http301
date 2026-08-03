@@ -18,6 +18,10 @@ builds:
       - amd64
       - arm64
       - wasm
+    ldflags:
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .Date }}
   - id: http301-otel
     env:
       - CGO_ENABLED=0
@@ -30,6 +34,10 @@ builds:
       - amd64
       - arm64
       - wasm
+    ldflags:
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .Date }}
 
 dockers:
   - image_templates:
